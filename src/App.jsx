@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 // Configure a webhook endpoint (Google Apps Script web app URL) via Vite env:
 // VITE_SHEET_WEBHOOK=https://script.google.com/macros/s/XXXX/exec
 const SHEET_WEBHOOK_URL = import.meta.env.VITE_SHEET_WEBHOOK || '';
+const SHEET_WEBHOOK_SECRET = import.meta.env.VITE_SHEET_SECRET || '';
 
 const services = [
   {
@@ -219,11 +220,11 @@ function App() {
     }
     setSubmitting(true);
     try {
-      const payload = { type: 'project_lead', timestamp: new Date().toISOString(), ...form };
+      const payload = { type: 'project_lead', timestamp: new Date().toISOString(), secret: SHEET_WEBHOOK_SECRET, ...form };
       if (SHEET_WEBHOOK_URL) {
         await fetch(SHEET_WEBHOOK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-webhook-secret': SHEET_WEBHOOK_SECRET },
           body: JSON.stringify(payload),
         });
       } else {
@@ -254,11 +255,11 @@ function App() {
 
     setBookingSending(true);
     try {
-      const payload = { type: 'booking', timestamp: new Date().toISOString(), ...booking };
+      const payload = { type: 'booking', timestamp: new Date().toISOString(), secret: SHEET_WEBHOOK_SECRET, ...booking };
       if (SHEET_WEBHOOK_URL) {
         await fetch(SHEET_WEBHOOK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-webhook-secret': SHEET_WEBHOOK_SECRET },
           body: JSON.stringify(payload),
         });
       } else {
