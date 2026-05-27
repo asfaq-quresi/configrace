@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 
+// Configure a webhook endpoint (Google Apps Script web app URL) via Vite env:
+// VITE_SHEET_WEBHOOK=https://script.google.com/macros/s/XXXX/exec
+const SHEET_WEBHOOK_URL = import.meta.env.VITE_SHEET_WEBHOOK || '';
+
 const services = [
   {
     title: 'Brand-first web design',
@@ -47,8 +51,8 @@ const themeStyles = {
     statText: 'text-slate-500',
     card: 'border-slate-200 bg-white/80',
     cardSoft: 'bg-white/85 border-slate-200',
-    panel: 'border-slate-200 bg-white/85',
-    panelInner: 'border-slate-200 bg-white/70',
+    panel: 'border-slate-200 bg-white',
+    panelInner: 'border-slate-200 bg-white',
     processCard: 'border-slate-200 bg-white/75',
     contactText: 'text-slate-700',
     contactHeading: 'text-slate-950',
@@ -78,8 +82,8 @@ const themeStyles = {
     statText: 'text-slate-400',
     card: 'border-white/10 bg-white/5',
     cardSoft: 'bg-white/5 border-white/10',
-    panel: 'border-white/10 bg-white/5',
-    panelInner: 'border-white/10 bg-slate-950/60',
+    panel: 'border-white/10 bg-slate-900',
+    panelInner: 'border-white/10 bg-slate-900',
     processCard: 'border-white/10 bg-slate-950/40',
     contactText: 'text-slate-200',
     contactHeading: 'text-white',
@@ -141,22 +145,134 @@ function App() {
   const [form, setForm] = useState(initialForm);
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [booking, setBooking] = useState({ name: '', email: '', phone: '', date: '', time: '', notes: '' });
+  const [bookingSending, setBookingSending] = useState(false);
+  const [bookingErrors, setBookingErrors] = useState({});
 
   const update = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-  const next = () => setStep((s) => Math.min(5, s + 1));
+  const validateEmail = (email) => {
+    return /^\S+@\S+\.\S+$/.test(email);
+  };
+
+  const validateStep = (s) => {
+    const newErrors = {};
+    if (s === 1) {
+      if (!form.scope || form.scope.trim().length < 5) {
+        newErrors.scope = 'Please describe the scope (1–2 sentences).';
+      }
+    }
+    if (s === 2) {
+      if (!form.description || form.description.trim().length < 10) {
+        newErrors.description = 'Please share the primary goals and audience.';
+      }
+    }
+    if (s === 3) {
+      if (!form.timeline || form.timeline.trim().length === 0) {
+        newErrors.timeline = 'Please provide an expected timeline.';
+      }
+      if (!form.budget || form.budget.trim().length === 0) {
+        newErrors.budget = 'Please indicate a budget range.';
+      }
+    }
+    if (s === 4) {
+      if (!form.name || form.name.trim().length === 0) {
+        newErrors.name = 'Please enter your full name.';
+      }
+      if (!form.email || !validateEmail(form.email)) {
+        newErrors.email = 'Please enter a valid email address.';
+      }
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateAllForm = () => {
+    // validate all steps; set step to first failing
+    for (let s = 1; s <= 4; s++) {
+      if (!validateStep(s)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const next = () => {
+    if (validateStep(step)) {
+      setStep((s) => Math.min(5, s + 1));
+    }
+  };
+
   const back = () => setStep((s) => Math.max(1, s - 1));
 
   const submitForm = async () => {
+    // validate all fields before sending
+    if (!validateAllForm()) {
+      // jump to first step that has error
+      if (errors.scope) setStep(1);
+      else if (errors.description) setStep(2);
+      else if (errors.timeline || errors.budget) setStep(3);
+      else if (errors.name || errors.email) setStep(4);
+      return;
+    }
     setSubmitting(true);
     try {
-      // Example: send to API — here we just log and simulate delay
-      console.log('Submitting project lead', form);
-      await new Promise((r) => setTimeout(r, 900));
+      const payload = { type: 'project_lead', timestamp: new Date().toISOString(), ...form };
+      if (SHEET_WEBHOOK_URL) {
+        await fetch(SHEET_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        console.log('No SHEET_WEBHOOK_URL configured — payload:', payload);
+      }
       setStep(5);
-      // keep modal open for confirmation
+    } catch (err) {
+      console.error('submitForm error', err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openBooking = () => setIsBookingOpen(true);
+  const closeBooking = () => setIsBookingOpen(false);
+
+  const updateBooking = (patch) => setBooking((b) => ({ ...b, ...patch }));
+
+  const submitBooking = async () => {
+    // validate booking inputs
+    const be = {};
+    if (!booking.name || booking.name.trim().length === 0) be.name = 'Please enter your name.';
+    if (!booking.email || !validateEmail(booking.email)) be.email = 'Please enter a valid email.';
+    if (!booking.date) be.date = 'Please pick a date.';
+    if (!booking.time) be.time = 'Please pick a time.';
+    setBookingErrors(be);
+    if (Object.keys(be).length > 0) return;
+
+    setBookingSending(true);
+    try {
+      const payload = { type: 'booking', timestamp: new Date().toISOString(), ...booking };
+      if (SHEET_WEBHOOK_URL) {
+        await fetch(SHEET_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        console.log('No SHEET_WEBHOOK_URL configured — booking payload:', payload);
+      }
+      // show a brief confirmation then close
+      setTimeout(() => {
+        setBooking({ name: '', email: '', phone: '', date: '', time: '', notes: '' });
+        setBookingSending(false);
+        closeBooking();
+      }, 900);
+    } catch (e) {
+      console.error(e);
+      setBookingSending(false);
     }
   };
 
@@ -336,28 +452,28 @@ function App() {
               </p>
               <div className="mt-8 flex flex-col gap-4 sm:flex-row">
                 <a
-                  href="mailto:hello@configrace.qzz.io"
+                  href="mailto:hello@configrace.com"
                   className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-base font-semibold text-slate-950 transition hover:bg-blue-100"
                 >
-                  hello@configrace.qzz.io
+                  hello@configrace.com
                 </a>
-                <a
-                  href="tel:+16623655057"
+                <button
+                  onClick={openBooking}
                   className={`inline-flex items-center justify-center rounded-full border px-6 py-3.5 text-base font-semibold transition ${styles.buttonSecondary}`}
                 >
-                  Schedule a call
-                </a>
+                  Book a session
+                </button>
               </div>
             </div>
           </section>
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
-          <div className={`relative z-10 w-full max-w-2xl rounded-2xl p-6 ${styles.panel} shadow-2xl`}> 
+          <div role="dialog" aria-modal="true" aria-label="Project form" className={`relative z-10 w-full max-w-3xl rounded-2xl p-6 ${styles.panel} shadow-2xl`}> 
             <div className="flex items-start justify-between">
               <div>
-                <h3 className={`text-lg font-bold ${styles.heading}`}>Start a project</h3>
-                <p className={`text-sm ${styles.infoText}`}>Tell us about your design or development needs.</p>
+                <h3 className={`text-lg font-bold ${styles.heading}`}>Start your project</h3>
+                <p className={`text-sm ${styles.infoText}`}>A few quick questions to help us scope your project — takes under 2 minutes.</p>
               </div>
               <button onClick={closeModal} aria-label="Close" className="rounded-full p-2 text-sm text-slate-500 hover:bg-white/5">
                 ×
@@ -382,7 +498,9 @@ function App() {
                     </div>
                     <div className="mt-4">
                       <label className="block text-sm font-medium mb-1">Scope (brief)</label>
-                      <input value={form.scope} onChange={(e) => update({ scope: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="E.g. Landing page, SaaS dashboard, e-commerce" />
+                      <input value={form.scope} onChange={(e) => update({ scope: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="E.g. Landing page, SaaS dashboard, e-commerce — 1–2 sentences" />
+                      {errors.scope && <p className="mt-1 text-sm text-red-500">{errors.scope}</p>}
+                      <p className="mt-2 text-xs text-slate-400">This helps us estimate time and recommend a scope.</p>
                     </div>
                   </div>
                 )}
@@ -390,7 +508,9 @@ function App() {
                 {step === 2 && (
                   <div>
                     <label className="block text-sm font-medium mb-2">Project goals</label>
-                    <textarea value={form.description} onChange={(e) => update({ description: e.target.value })} className="w-full rounded-md border p-3" rows={5} placeholder="What's the main purpose? Who's the audience?" />
+                    <textarea value={form.description} onChange={(e) => update({ description: e.target.value })} className="w-full rounded-md border p-3" rows={5} placeholder="What's the main purpose? Who's the audience? What outcome matters most?" />
+                    {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
+                    <p className="mt-2 text-xs text-slate-400">Tip: focus on outcomes (e.g. increase signups, support existing users, gather leads).</p>
                   </div>
                 )}
 
@@ -398,9 +518,11 @@ function App() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Timeline</label>
                     <input value={form.timeline} onChange={(e) => update({ timeline: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="e.g. 4-6 weeks" />
+                    {errors.timeline && <p className="mt-1 text-sm text-red-500">{errors.timeline}</p>}
                     <div className="mt-4">
                       <label className="block text-sm font-medium mb-2">Budget</label>
                       <input value={form.budget} onChange={(e) => update({ budget: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="e.g. $5k - $20k" />
+                      {errors.budget && <p className="mt-1 text-sm text-red-500">{errors.budget}</p>}
                     </div>
                   </div>
                 )}
@@ -409,8 +531,11 @@ function App() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Your contact info</label>
                     <input value={form.name} onChange={(e) => update({ name: e.target.value })} className="w-full rounded-md border px-3 py-2 mb-3" placeholder="Full name" />
+                    {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
                     <input value={form.email} onChange={(e) => update({ email: e.target.value })} className="w-full rounded-md border px-3 py-2 mb-3" placeholder="Email" type="email" />
+                    {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
                     <input value={form.phone} onChange={(e) => update({ phone: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="Phone (optional)" />
+                    <p className="mt-2 text-xs text-slate-400">We’ll only use this to reach out about your project.</p>
                   </div>
                 )}
 
@@ -436,7 +561,7 @@ function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     {step < 5 && (
-                      <button type="button" onClick={next} className="rounded-md bg-blue-500 px-4 py-2 text-white">Next</button>
+                      <button type="button" onClick={next} className="rounded-md bg-blue-500 px-4 py-2 text-white">Continue</button>
                     )}
                     {step === 5 && (
                       <button type="button" onClick={submitForm} disabled={submitting} className="rounded-md bg-blue-600 px-4 py-2 text-white">{submitting ? 'Sending…' : 'Send request'}</button>
@@ -444,6 +569,49 @@ function App() {
                   </div>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBookingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeBooking} />
+          <div role="dialog" aria-modal="true" aria-label="Book a session" className={`relative z-10 w-full max-w-md rounded-2xl p-6 ${styles.panel} shadow-2xl`}> 
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className={`text-lg font-bold ${styles.heading}`}>Book a session</h3>
+                <p className={`text-sm ${styles.infoText}`}>Pick a date and time that works for you.</p>
+              </div>
+              <button onClick={closeBooking} aria-label="Close" className="rounded-full p-2 text-sm text-slate-500 hover:bg-white/5">×</button>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-1">Full name</label>
+              <input value={booking.name} onChange={(e) => updateBooking({ name: e.target.value })} className="w-full rounded-md border px-3 py-2 mb-3" />
+              {bookingErrors.name && <p className="mt-1 text-sm text-red-500">{bookingErrors.name}</p>}
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <input value={booking.email} onChange={(e) => updateBooking({ email: e.target.value })} className="w-full rounded-md border px-3 py-2 mb-3" type="email" />
+              {bookingErrors.email && <p className="mt-1 text-sm text-red-500">{bookingErrors.email}</p>}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Date</label>
+                  <input value={booking.date} onChange={(e) => updateBooking({ date: e.target.value })} className="w-full rounded-md border px-3 py-2" type="date" />
+                  {bookingErrors.date && <p className="mt-1 text-sm text-red-500">{bookingErrors.date}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Time</label>
+                  <input value={booking.time} onChange={(e) => updateBooking({ time: e.target.value })} className="w-full rounded-md border px-3 py-2" type="time" />
+                  {bookingErrors.time && <p className="mt-1 text-sm text-red-500">{bookingErrors.time}</p>}
+                </div>
+              </div>
+              <label className="block text-sm font-medium mb-1 mt-3">Notes (optional)</label>
+              <textarea value={booking.notes} onChange={(e) => updateBooking({ notes: e.target.value })} className="w-full rounded-md border p-2" rows={3} />
+
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={closeBooking} className="rounded-md px-4 py-2 border">Cancel</button>
+                <button onClick={submitBooking} disabled={bookingSending} className="rounded-md bg-blue-600 px-4 py-2 text-white">{bookingSending ? 'Booking…' : 'Book session'}</button>
+              </div>
             </div>
           </div>
         </div>
