@@ -1,0 +1,41 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite / build
+dist/
+.vite/
+.turbo/
+
+# Env
+.env
+.env.*.local
+.env.local
+
+# Logs
+logs
+*.log
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor dirs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+/coverage/
+.nyc_output/
+
+# Misc
+*.tgz
+.cache/
