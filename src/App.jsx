@@ -110,6 +110,7 @@ function getInitialTheme() {
 
 function App() {
   const [theme, setTheme] = useState(getInitialTheme);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const styles = themeStyles[theme];
 
   useEffect(() => {
@@ -121,6 +122,42 @@ function App() {
 
   const toggleTheme = () => {
     setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
+  };
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
+
+  // Multi-step form state
+  const initialForm = {
+    projectType: 'web-design',
+    scope: '',
+    description: '',
+    timeline: '',
+    budget: '',
+    name: '',
+    email: '',
+    phone: '',
+  };
+  const [form, setForm] = useState(initialForm);
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+
+  const update = (patch) => setForm((f) => ({ ...f, ...patch }));
+
+  const next = () => setStep((s) => Math.min(5, s + 1));
+  const back = () => setStep((s) => Math.max(1, s - 1));
+
+  const submitForm = async () => {
+    setSubmitting(true);
+    try {
+      // Example: send to API — here we just log and simulate delay
+      console.log('Submitting project lead', form);
+      await new Promise((r) => setTimeout(r, 900));
+      setStep(5);
+      // keep modal open for confirmation
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -157,12 +194,12 @@ function App() {
                   </svg>
                 )}
               </button>
-              <a
-                href="#contact"
+              <button
+                onClick={openModal}
                 className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${styles.buttonGhost}`}
               >
                 Start a project
-              </a>
+              </button>
             </div>
           </header>
 
@@ -313,6 +350,104 @@ function App() {
               </div>
             </div>
           </section>
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
+          <div className={`relative z-10 w-full max-w-2xl rounded-2xl p-6 ${styles.panel} shadow-2xl`}> 
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className={`text-lg font-bold ${styles.heading}`}>Start a project</h3>
+                <p className={`text-sm ${styles.infoText}`}>Tell us about your design or development needs.</p>
+              </div>
+              <button onClick={closeModal} aria-label="Close" className="rounded-full p-2 text-sm text-slate-500 hover:bg-white/5">
+                ×
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex-1 h-2 rounded-full bg-slate-200/30">
+                  <div style={{ width: `${(step / 5) * 100}%` }} className="h-2 rounded-full bg-blue-500" />
+                </div>
+                <div className="text-sm font-medium">Step {step} / 5</div>
+              </div>
+
+              <form onSubmit={(e) => e.preventDefault()}>
+                {step === 1 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Project type</label>
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => update({ projectType: 'web-design' })} className={`rounded-lg px-4 py-2 ${form.projectType === 'web-design' ? 'bg-blue-500 text-white' : 'bg-white/5'}`}>Web / Visual design</button>
+                      <button type="button" onClick={() => update({ projectType: 'web-app' })} className={`rounded-lg px-4 py-2 ${form.projectType === 'web-app' ? 'bg-blue-500 text-white' : 'bg-white/5'}`}>Application / Web development</button>
+                    </div>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-1">Scope (brief)</label>
+                      <input value={form.scope} onChange={(e) => update({ scope: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="E.g. Landing page, SaaS dashboard, e-commerce" />
+                    </div>
+                  </div>
+                )}
+
+                {step === 2 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Project goals</label>
+                    <textarea value={form.description} onChange={(e) => update({ description: e.target.value })} className="w-full rounded-md border p-3" rows={5} placeholder="What's the main purpose? Who's the audience?" />
+                  </div>
+                )}
+
+                {step === 3 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Timeline</label>
+                    <input value={form.timeline} onChange={(e) => update({ timeline: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="e.g. 4-6 weeks" />
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-2">Budget</label>
+                      <input value={form.budget} onChange={(e) => update({ budget: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="e.g. $5k - $20k" />
+                    </div>
+                  </div>
+                )}
+
+                {step === 4 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Your contact info</label>
+                    <input value={form.name} onChange={(e) => update({ name: e.target.value })} className="w-full rounded-md border px-3 py-2 mb-3" placeholder="Full name" />
+                    <input value={form.email} onChange={(e) => update({ email: e.target.value })} className="w-full rounded-md border px-3 py-2 mb-3" placeholder="Email" type="email" />
+                    <input value={form.phone} onChange={(e) => update({ phone: e.target.value })} className="w-full rounded-md border px-3 py-2" placeholder="Phone (optional)" />
+                  </div>
+                )}
+
+                {step === 5 && (
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Review</h4>
+                    <div className="space-y-2 text-sm">
+                      <div><strong>Type:</strong> {form.projectType}</div>
+                      <div><strong>Scope:</strong> {form.scope || '—'}</div>
+                      <div><strong>Goals:</strong> {form.description || '—'}</div>
+                      <div><strong>Timeline:</strong> {form.timeline || '—'}</div>
+                      <div><strong>Budget:</strong> {form.budget || '—'}</div>
+                      <div><strong>Name:</strong> {form.name || '—'}</div>
+                      <div><strong>Email:</strong> {form.email || '—'}</div>
+                      <div><strong>Phone:</strong> {form.phone || '—'}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 flex items-center justify-between">
+                  <div>
+                    {step > 1 && <button type="button" onClick={back} className="rounded-md px-4 py-2 border">Back</button>}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {step < 5 && (
+                      <button type="button" onClick={next} className="rounded-md bg-blue-500 px-4 py-2 text-white">Next</button>
+                    )}
+                    {step === 5 && (
+                      <button type="button" onClick={submitForm} disabled={submitting} className="rounded-md bg-blue-600 px-4 py-2 text-white">{submitting ? 'Sending…' : 'Send request'}</button>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       </section>
     </main>
